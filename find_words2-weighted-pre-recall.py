@@ -5,20 +5,21 @@ import numpy as np
 import pandas as pd
 from progress.bar import Bar
 
-# expression_file = 'files/xlsx/Precisiion-Recall our corpus.xlsx'
 from util import escape_text
 
-expression_file = 'files/xlsx/Expressions for precision-recall.xlsx'
+# expression_file = 'files/xlsx/Precisiion-Recall our corpus.xlsx'
+expression_file = 'files/xlsx/Precisiion-Recall our corpus - 10.xlsx'
+# expression_file = 'files/xlsx/Expressions for precision-recall.xlsx'
 
 terms_file = 'files/xlsx/word_windows_list.xlsx'
 
 weights_file = 'files/xlsx/weights.xlsx'
 
-# raw_output_file = 'files/xlsx/Precisiion-Recall our corpus-raw.xlsx'
-raw_output_file = 'files/xlsx/Precisiion-Recall their corpus-raw.xlsx'
+raw_output_file = 'files/xlsx/Precisiion-Recall our corpus - 10 -raw - gte.xlsx'
+# raw_output_file = 'files/xlsx/Precisiion-Recall their corpus-raw.xlsx'
 
-summary_output_file = 'files/xlsx/Precisiion-Recall their corpus-summary.xlsx'
-# summary_output_file = 'files/xlsx/Precisiion-Recall our corpus-summary.xlsx'
+# summary_output_file = 'files/xlsx/Precisiion-Recall their corpus-summary.xlsx'
+summary_output_file = 'files/xlsx/Precisiion-Recall our corpus - 10 -summary - gte.xlsx'
 
 term_df = pd.read_excel(terms_file)
 weights_df = pd.read_excel(weights_file)
@@ -49,10 +50,10 @@ headings = ['concatenated expression', 'core term index', 'def+term count', 'def
 
 
 def calc_stats(df, col_name, thresh):
-    df['TP'] = (df[col_name] > thresh).astype(int) * (df['is geo'] == 1).astype(int)
-    df['FP'] = (df[col_name] > thresh).astype(int) * (df['is geo'] == 0).astype(int)
-    df['TN'] = (df[col_name] <= thresh).astype(int) * (df['is geo'] == 0).astype(int)
-    df['FN'] = (df[col_name] <= thresh).astype(int) * (df['is geo'] == 1).astype(int)
+    df['TP'] = (df[col_name] >= thresh).astype(int) * (df['is geo'] == 1).astype(int)
+    df['FP'] = (df[col_name] >= thresh).astype(int) * (df['is geo'] == 0).astype(int)
+    df['TN'] = (df[col_name] < thresh).astype(int) * (df['is geo'] == 0).astype(int)
+    df['FN'] = (df[col_name] < thresh).astype(int) * (df['is geo'] == 1).astype(int)
 
     tp = df['TP'].sum()
     fp = df['FP'].sum()
@@ -206,7 +207,7 @@ def main():
 
             summary['score'][thresh][el.sheet_name] = calc_stats(el.df, 'score', thresh)
             # Write each dataframe to a different worksheet.
-            if thresh > 0.5:
+            if thresh == 0.5:
                 el.df.to_excel(raw_writer, sheet_name=el.sheet_name, index=None)
 
         for row_num, thresh in enumerate([0, 1, 2, 3, 4, 5]):

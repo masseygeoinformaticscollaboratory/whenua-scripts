@@ -1,6 +1,8 @@
 import pandas as pd
 from progress.bar import Bar
 
+from util import escape_text
+
 expression_file = 'files/xlsx/Expressions for precision-recall.xlsx'
 
 terms_file = 'files/xlsx/word_windows_list.xlsx'

@@ -1,4 +1,5 @@
 import re
+from copy import deepcopy
 
 import gensim
 import regex
@@ -86,3 +87,73 @@ def calc_bigram_freq(words, word_freqs):
             word_freqs[bigram] += 1
         else:
             word_freqs[bigram] = 1
+
+
+def indices(lst, element):
+    result = []
+    offset = -1
+    while True:
+        try:
+            offset = lst.index(element, offset+1)
+            result.append(offset)
+        except ValueError:
+            break
+    return result
+
+
+def get_word_windows(keyword, original_words, window_length):
+    searching_frame = deepcopy(original_words)
+    searching_frame_offset = 0
+
+    pairs = []
+    while True:
+        try:
+            keyword_index = searching_frame.index(keyword)
+        except ValueError:
+            break
+
+        keyword_index_inset = searching_frame_offset + keyword_index
+
+        window_1_start = keyword_index_inset - window_length - 1
+        if window_1_start < 0:
+            window_1_start = 0
+
+        window_1_ends = keyword_index_inset
+        if window_1_ends < 0:
+            window_1_ends = 0
+
+        window_2_ends = keyword_index_inset + window_length
+        window_2_ends = min(window_2_ends, len(original_words)) + 1
+
+        window_1 = original_words[window_1_start:window_1_ends]
+        window_2 = original_words[keyword_index_inset+1:window_2_ends]
+
+        pair = window_1, window_2
+        pairs.append(pair)
+
+        searching_frame_offset += keyword_index + 1
+
+        searching_frame = original_words[searching_frame_offset:]
+
+    return pairs
+
+
+def search_all_keywords(word_list, keywords, definitives):
+    retval = {}
+    for keyword in keywords:
+        while True:
+            try:
+                index = word_list.index(keyword)
+                if index > 0:
+                    prev_word = word_list[index - 1]
+                    if prev_word in definitives:
+                        keyword_defs = retval.get(keyword, None)
+                        if keyword_defs is None:
+                            keyword_defs = {}
+                            retval[keyword] = keyword_defs
+                        keyword_defs[prev_word] = keyword_defs.get(prev_word, 0) + 1
+
+                word_list = word_list[index + 1:]
+            except ValueError:
+                break
+    return retval
