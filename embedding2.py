@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import scipy.spatial as sp
 
+from AbstractCommand import AbstractCommand
 from util import get_word_windows, clean_exp_and_remove_stopwords
 
 reference_xlsx = 'files/both_together_10_words.xlsx'
@@ -73,6 +74,7 @@ def get_reference_terms():
 
 def get_embeddings():
     embedding_cache = embedding_file + '.pkl'
+
     if os.path.isfile(embedding_cache):
         with open(embedding_cache, 'rb') as f:
             d = pickle.load(f)
@@ -118,11 +120,11 @@ def get_all_expressions(terms: dict):
     bar.finish()
 
 
-def extract_most_similar(terms):
+def extract_most_similar(cache_dir, terms):
     output_file = 'files/embedding2.output.xlsx'
     writer = pd.ExcelWriter(output_file, engine='xlsxwriter')
     for term_ind, term in enumerate(terms.values()):
-        rows_cache = 'embedding2.rows.{}.pkl'.format(term.core)
+        rows_cache = os.path.join(cache_dir, 'embedding2.rows.{}.pkl'.format(term.core))
         if os.path.isfile(rows_cache):
             with open(rows_cache, 'rb') as f:
                 rows = pickle.load(f)
@@ -180,14 +182,18 @@ def extract_most_similar(terms):
     print('Finished extracting most similar terms and score. Output is at ' + output_file)
 
 
-class Command:
+class Command(AbstractCommand):
+    
+    def __init__(self):
+        super(Command, self).__init__(__file__)
 
     def run(self, limit, method):
         if method not in ['normal', 'tfidf']:
             raise Exception('Unknown method {}'.format(method))
         keywords, embeddings = get_embeddings()
+
         keywords = {k: i for i, k in enumerate(keywords)}
-        cache_file = 'embedding2.terms.pkl'
+        cache_file = self.get_cache_path('embedding2.terms.pkl')
         if os.path.isfile(cache_file):
             with open(cache_file, 'rb') as f:
                 terms = pickle.load(f)
@@ -214,17 +220,11 @@ class Command:
         with open(cache_file, 'wb') as f:
             pickle.dump(terms, f)
 
-        extract_most_similar(terms)
+        extract_most_similar(self.cache_dir, terms)
 
 if __name__ == '__main__':
     limit = None
     method = 'normal'
-
-    # arr = 'Mama just killed a man put a gun against his head pulled my trigger now he\'s dead'.split(' ')
-    # words = 'killed pulled dead killed'.split(' ')
-    # import numpy_indexed as npi
-    # ind = npi.indices(arr, words)
-    # x = 0
 
     command = Command()
     start = time.time()
