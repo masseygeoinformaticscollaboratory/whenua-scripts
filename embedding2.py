@@ -44,20 +44,43 @@ class Expression:
 
 
 class Term:
-    def __init__(self, sheet_name):
-        self.core = sheet_name
-        self.reference_expressions = []
-        self.all_expressions = []
+    def __init__(self, core):
+        self.core = core
+        self.expressions = []
 
 
-def get_reference_terms():
-    terms = {}
+def get_terms(cache_dir, type, keyword, window_size):
+    if window_size is None or window_size == 10:
+        cache_file = os.path.join(cache_dir, '{}.{}.pkl'.format(keyword, type))
+    else:
+        cache_file = os.path.join(cache_dir, '{}-{}.{}.pkl'.format(keyword, window_size, type))
+    if not os.path.isfile(cache_file):
+        raise FileNotFoundError('File {} not found'.format(cache_file))
 
+    with open(cache_file, 'rb') as f:
+        return pickle.load(f)
+
+
+def save_terms(cache_dir, type, term, window_size):
+    if window_size is None or window_size == 10:
+        cache_file = os.path.join(cache_dir, '{}.{}.pkl'.format(term.core, type))
+    else:
+        cache_file = os.path.join(cache_dir, '{}-{}.{}.pkl'.format(term.core, window_size, type))
+    with open(cache_file, 'wb') as f:
+        pickle.dump(term, f)
+
+
+def extract_reference_terms(cache_dir):
+    keywords = []
     xl = pd.ExcelFile(reference_xlsx)
     for keyword in xl.sheet_names:
+        cache_file = os.path.join(cache_dir, '{}.ref.pkl'.format(keyword))
+        if os.path.isfile(cache_file):
+            keywords.append(keyword)
+            continue
         df = xl.parse(keyword)
         term = Term(keyword)
-        terms[keyword] = term
+        keywords.append(keyword)
         for row_num, row in df.iterrows():
             expression = clean_exp_and_remove_stopwords(row['concatenated expression'])
             is_geo = str(row['geo/or not']) == '1'
@@ -67,9 +90,11 @@ def get_reference_terms():
                 ex = Expression(term, before=words[:keyword_ind], after=words[keyword_ind + 1:], is_geo=is_geo)
             except ValueError as e:
                 ex = Expression(term, before=words, after=[], is_geo=is_geo)
-            term.reference_expressions.append(ex)
+            term.expressions.append(ex)
+        with open(cache_file, 'wb') as f:
+            pickle.dump(term, f)
     xl.close()
-    return terms
+    return keywords
 
 
 def get_embeddings():
@@ -97,7 +122,21 @@ def get_embeddings():
     return keywords, embeddings
 
 
-def get_all_expressions(terms: dict):
+def extract_db_expressions(cache_dir, keywords: list, window_size: int):
+    already_exist = []
+    for keyword in keywords:
+        if window_size == 10:
+            cache_file = os.path.join(cache_dir, '{}.db.pkl'.format(keyword))
+        else:
+            cache_file = os.path.join(cache_dir, '{}-{}.db.pkl'.format(keyword, window_size))
+        if os.path.isfile(cache_file):
+            already_exist.append(keyword)
+
+    if len(already_exist) == len(keywords):
+        return
+
+    new_terms = {}
+
     client = MongoClient('mongodb://admin:6677028xxbbkat@localhost:27017/whenua')
     mydb = client.whenua
     mycol = mydb.whenua
@@ -109,40 +148,55 @@ def get_all_expressions(terms: dict):
         sentence = clean_exp_and_remove_stopwords(sentence)
         original_words = sentence.split(' ')
 
-        for keyword, term in terms.items():
-            pairs = get_word_windows(keyword, original_words, 10)
+        for keyword in keywords:
+            if keyword in already_exist:
+                continue
+            term = new_terms.get(keyword, None)
+            if term is None:
+                term = Term(keyword)
+                new_terms[keyword] = term
+            pairs = get_word_windows(keyword, original_words, window_size)
             for before20, after20 in pairs:
                 if len(' '.join(before20 + after20).strip()) == 0:
                     continue
                 ex = Expression(term, before20, after20, None)
-                term.all_expressions.append(ex)
+                term.expressions.append(ex)
         bar.next()
     bar.finish()
 
-
-def extract_most_similar(cache_dir, terms):
-    output_file = 'files/embedding2.output.xlsx'
-    writer = pd.ExcelWriter(output_file, engine='xlsxwriter')
-    for term_ind, term in enumerate(terms.values()):
-        rows_cache = os.path.join(cache_dir, 'embedding2.rows.{}.pkl'.format(term.core))
-        if os.path.isfile(rows_cache):
-            with open(rows_cache, 'rb') as f:
-                rows = pickle.load(f)
+    for term in new_terms.values():
+        if window_size == 10:
+            cache_file = os.path.join(cache_dir, '{}.db.pkl'.format(term.core))
         else:
-            rows = []
+            cache_file = os.path.join(cache_dir, '{}-{}.db.pkl'.format(term.core, window_size))
+        print('Saving ' + cache_file)
+        with open(cache_file, 'wb') as f:
+            pickle.dump(term, f)
+
+
+def extract_most_similar(cache_dir, keywords, window_size):
+    output_file = 'files/embedding2-{}.output.xlsx'.format(window_size)
+    writer = pd.ExcelWriter(output_file, engine='xlsxwriter')
+    for keyword in keywords:
+        term_ref = get_terms(cache_dir, 'ref', keyword, None)
+        if window_size == 10:
+            rows_cache = os.path.join(cache_dir, 'rows.{}.pkl'.format(keyword))
+        else:
+            rows_cache = os.path.join(cache_dir, 'rows.{}-{}.pkl'.format(keyword, window_size))
+        if os.path.isfile(rows_cache):
+            continue
 
         reference_matrix = []
+        rows = []
 
-        bar = Bar('Extracting most similar for term {}'.format(term.core), max=len(term.all_expressions))
+        bar = Bar('Extracting most similar for term {}'.format(keyword), max=len(term_ref.expressions))
 
-        for expr in term.reference_expressions:
+        for expr in term_ref.expressions:
             reference_matrix.append(expr.avg_embbedding)
         reference_matrix = np.array(reference_matrix, dtype=float)
 
-        bar.next(len(rows))
-        for expr_ind, expr in enumerate(term.all_expressions):
-            if expr_ind < len(rows):
-                continue
+        term_db = get_terms(cache_dir, 'db', keyword, window_size)
+        for expr_ind, expr in enumerate(term_db.expressions):
             if np.any(np.isnan(expr.avg_embbedding)):
                 warning('Expression ' + expr.get_full_expr() + ' has nan avg embedding')
                 row = [expr.get_full_expr(), 'N/A', 0, '']
@@ -161,22 +215,20 @@ def extract_most_similar(cache_dir, terms):
                 if score is not None and score != similarity:
                     break
                 score = similarity
-                closest_expr = term.reference_expressions[sort_ind]
+                closest_expr = term_ref.expressions[sort_ind]
                 is_geos.append(1 if closest_expr.is_geo else 0)
             is_geos = np.array(is_geos)
             is_geo = False if len(is_geos) == 0 else is_geos.mean() >= 0.5
             row = [expr.get_full_expr(), 1 if is_geo else 0, score, closest_expr.get_full_expr()]
             rows.append(row)
-
-            if (expr_ind > 0 and expr_ind % 10000 == 0) or expr_ind == len(term.all_expressions) - 1:
-                with open(rows_cache, 'wb') as f:
-                    print('Saving a cache for term {} at {}'.format(term.core, rows_cache))
-                    pickle.dump(rows, f)
             bar.next()
         bar.finish()
+        with open(rows_cache, 'wb') as f:
+            print('Saving a cache for term {} at {}'.format(keyword, rows_cache))
+            pickle.dump(rows, f)
 
         df = pd.DataFrame(columns=['Expression', 'geo/or not', 'Score', 'Most similar'], data=rows)
-        df.to_excel(writer, sheet_name=term.core, index=None)
+        df.to_excel(writer, sheet_name=keyword, index=None)
 
     writer.save()
     print('Finished extracting most similar terms and score. Output is at ' + output_file)
@@ -187,47 +239,35 @@ class Command(AbstractCommand):
     def __init__(self):
         super(Command, self).__init__(__file__)
 
-    def run(self, limit, method):
-        if method not in ['normal', 'tfidf']:
-            raise Exception('Unknown method {}'.format(method))
-        keywords, embeddings = get_embeddings()
+    def run(self, window_size):
+        embedded_terms, embeddings = get_embeddings()
 
-        keywords = {k: i for i, k in enumerate(keywords)}
-        cache_file = self.get_cache_path('embedding2.terms.pkl')
-        if os.path.isfile(cache_file):
-            with open(cache_file, 'rb') as f:
-                terms = pickle.load(f)
-        else:
-            terms = get_reference_terms()
-            get_all_expressions(terms)
+        embedded_terms = {k: i for i, k in enumerate(embedded_terms)}
 
-            with open(cache_file, 'wb') as f:
-                pickle.dump(terms, f)
+        ref_keywords = extract_reference_terms(self.cache_dir)
+        extract_db_expressions(self.cache_dir, ref_keywords, window_size)
 
-        num_calc = 0
-        for term in terms.values():
-            num_calc += len(term.all_expressions) + len(term.reference_expressions)
-
-        bar = Bar('Calculating avg embedding', max=num_calc,
+        bar = Bar('Calculating avg embedding', max=len(ref_keywords),
                   suffix='%(index)d/%(max)d Elapsed %(elapsed)ds - ETA %(eta)ds')
-        for term in terms.values():
-            for exp in (term.reference_expressions + term.all_expressions):
+
+        for keyword in ref_keywords:
+            term_ref = get_terms(self.cache_dir, 'ref', keyword, None)
+            term_db = get_terms(self.cache_dir, 'db', keyword, window_size)
+            for exp in term_ref.expressions + term_db.expressions:
                 if exp.avg_embbedding is None:
-                    exp.calc_avg_embedding(keywords, embeddings)
-                bar.next()
+                    exp.calc_avg_embedding(embedded_terms, embeddings)
+            bar.next()
+
+            save_terms(self.cache_dir, 'ref', term_ref, None)
+            save_terms(self.cache_dir, 'db', term_db, window_size)
         bar.finish()
 
-        with open(cache_file, 'wb') as f:
-            pickle.dump(terms, f)
+        extract_most_similar(self.cache_dir, ref_keywords, window_size)
 
-        extract_most_similar(self.cache_dir, terms)
 
 if __name__ == '__main__':
-    limit = None
-    method = 'normal'
-
     command = Command()
     start = time.time()
-    command.run(limit, method)
+    command.run(window_size=5)
     end = time.time()
     print('Took {} seconds'.format(end - start))
