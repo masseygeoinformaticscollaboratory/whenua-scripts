@@ -6,22 +6,23 @@ import regex
 import unidecode
 from nltk.corpus import stopwords
 
-stop_words = stopwords.words('english')
-stop_words.extend(
-    ['e', 'he', 'tetahi', 'amo', 'ano', 'ki', 'katoa', 'tetahi', 'a', 'hoki', 'kaore', 'kahore', 'kare', 'kore',
-     'ehara', 'hei', 'kei', 'i', 'i te mea', 'na te mea', 'no te meaki te mea', 'kua', 'mua', 'raua tahi', 'engari',
-     'I', 'kihai', 'kaore', 'kare', 'kahore', 'raro', 'ia', 'torutoru', 'mo', 'ma', 'ia', 'ia', 'konei', 'anei', 'ina',
-     'ana', 'ona', 'ia ano', 'ia', 'ia ano', 'tana', 'ana', 'tona ', 'ona', 'pehea', 'au', 'ahau', 'maku', 'mehemea',
-     'mena', 'me', 'me', 'au', 'ahau', 'ano', 'nuinga', 'taku', 'taku', 'aku', 'toku', 'oku', 'au ano', 'ahau ano',
-     'kao', 'kao', 'ehara', 'o', 'a', 'kotahi', 'noa iho', 'anake', 'ranei', 'atu', 'to taua', 'to tatou', 'to tatau',
-     'to maua', 'to matou', 'o taua', 'o tatou', 'o tatau', 'o maua', 'o matou', 'taua ano', 'tatou ano', 'tatau ano',
-     'maua ano', 'matou ano matau ano', 'orite', 'ia', 'me', 'me kaua', 'na reira', 'no reira', 'na', 'na', 'etahi',
-     'he', 'i', 'tena', 'tera', 'taua', 'koia', 'ko ia', 'koina', 'koia tena', 'koira', 'te', 'nga', 'ta raua',
-     'ta ratou', 'to raua', 'to ratou', 'to ratau', 'a raua', 'a ratou', 'o raua', 'o ratou', 'o ratau', 'raua ',
-     'ratou', 'ratau', 'rau ano', 'ratou ano', 'ratau ano', 'kona', 'kora', 'ko', 'enei', 'tenei', 'ena', 'era', 'hoki',
-     'raro', 'tae noa', 'kia', 'runga', 'tino', 'maua', 'matou', 'taua', 'tatou', 'tatau', 'aha', 'ina', 'kia', 'ka',
-     'no te', 'hea', 'tehea', 'ehea', 'ko wai', 'na wai', 'ma wai', 'na wai', 'no wai', 'he aha ai', 'e kore', 'koe',
-     'tou', 'tau', 'ou', 'au', 'koe ano', 'koutou ano'])
+
+stop_words_eng = stopwords.words('english')
+stop_words_maori = [
+    'i', 'o', 'ki', 'ka', 'ko', 'me', 'atu', 'kia', 'nei', 'ai', 'mō', 'kua', 'kei', 'ake', 'tonu', 'nō', 'mo', 'rāua',
+    'ahakoa', 'mōna', 'te', 'tēnei', 'ētahi', 'tōna', 'tana', 'taku', 'ōna', 'aku', 'tōku', 'tāna', 'enei', 'toku',
+    'era', 'tōu', 'tōnā', 'heoi', 'aue', 'ä', 'rātou', 'koutou', 'matou', 'kōrua', 'ngā', 'he', 'nga', 'e', 'a', 'anō',
+    'nā', 'oku', 'tētahi', 'tērā', 'tetahi', 'kaua', 'kāhore', 'kīhai', 'ehara', 'ngātahi', 'rawa', 'rānei', 'tēnā',
+    'mātou', 'iho', 'ēnei', 'tenei', 'kāore', 'no', 'na', 'tātou', 'ma', 'engari', 'aha', 'kē', 'ra', 'ano', 'ahau',
+    'arā', 'ratou', 'pea', 'āhua', 'aua', 'rātau', 'āta', 'tona', 'ke', 'konei', 'koia', 'tatou', 'kaore', 'āna',
+    'tētehi', 'ērā', 'etahi', 'ngä', 'tera', 'pēhea', 'ranei', 'mātau', 'raua', 'hai', 'katahi', 'otirā', 'kāre',
+    'nāna', 'inā', 'anei', 'ētehi', 'kahore', 'ahua', 'ēngari', 'ōku', 'tāku', 'ināianei', 'māua', 'ē', 'ratau', 'tāua',
+    'ngaa', 'otira', 'kāti', 'tē', 'aia', 'āu', 'whea', 'tetehi', 'māku', 'tö', 'mai', 'tā', 'töna', 'ana', 'nana',
+    'au', 'kihai', 'torutoru', 'tāu', 'tëtahi', 'ā', 'hei', 'hoki', 'to', 'mā', 'rā', 'koe', 'katoa', 'tō', 'tino',
+    'noa', 'taua', 'kore', 'ō', 'ta', 'ina', 'tä', 'tå'
+]
+
+stop_words = set(stop_words_eng + [unidecode.unidecode(x) for x in stop_words_maori])
 
 
 def escape_text(text_raw, lower=True):
@@ -34,10 +35,13 @@ def escape_text(text_raw, lower=True):
     return text_raw
 
 
-def clean_exp_and_remove_stopwords(exp, deacc=True, lower=True):
+def clean_exp_and_remove_stopwords(exp, deacc=True, lower=True, remove_stop_words=True):
     text_raw = escape_text(exp, lower)
     if deacc:
         text_raw = unidecode.unidecode(text_raw)
+    if remove_stop_words:
+        words = text_raw.split(' ')
+        text_raw = ' '.join([word for word in words if word not in stop_words])
     return text_raw
 
 

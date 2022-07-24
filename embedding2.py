@@ -10,9 +10,9 @@ import numpy as np
 import scipy.spatial as sp
 
 from AbstractCommand import AbstractCommand
-from util import get_word_windows, clean_exp_and_remove_stopwords
+from util import get_word_windows, clean_exp_and_remove_stopwords, stop_words
 
-reference_xlsx = 'files/both_together_10_words.xlsx'
+# reference_xlsx = 'files/both_together_10_words.xlsx'
 embedding_file = 'embedding-None-None.csv'
 
 
@@ -31,12 +31,17 @@ class Expression:
     def calc_avg_embedding(self, keywords, embeddings):
         matrix = []
         for word in self.before + self.after:
+            if word in stop_words:
+                continue
             word_index = keywords.get(word, None)
             if word_index is None:
                 continue
             word_embedding = embeddings[word_index]
             matrix.append(word_embedding)
 
+        if len(matrix) == 0:
+            self.avg_embbedding = np.ndarray((0, embeddings.shape[1]))
+            return
         matrix = np.array(matrix, dtype=float)
         self.avg_embbedding = matrix.mean(axis=0)
         if np.any(np.isnan(self.avg_embbedding)):
@@ -70,7 +75,7 @@ def save_terms(cache_dir, type, term, window_size):
         pickle.dump(term, f)
 
 
-def extract_reference_terms(cache_dir):
+def extract_reference_terms(cache_dir, reference_xlsx):
     keywords = []
     xl = pd.ExcelFile(reference_xlsx)
     for keyword in xl.sheet_names:
@@ -132,7 +137,9 @@ def extract_db_expressions(cache_dir, keywords: list, window_size: int):
         if os.path.isfile(cache_file):
             already_exist.append(keyword)
 
-    if len(already_exist) == len(keywords):
+    remaining_keywords = set(keywords) - set(already_exist)
+
+    if len(remaining_keywords) == 0:
         return
 
     new_terms = {}
@@ -141,16 +148,14 @@ def extract_db_expressions(cache_dir, keywords: list, window_size: int):
     mydb = client.whenua
     mycol = mydb.whenua
     docs = mycol.find({}, {'Text_Raw': 1, '_id': 0})
-    bar = Bar('Reading all documents from db', max=docs.count())
+    bar = Bar('Reading all documents from db for keywords: {}'.format(','.join(remaining_keywords)), max=docs.count())
 
     for doc_num, doc in enumerate(docs):
         sentence = doc['Text_Raw']
         sentence = clean_exp_and_remove_stopwords(sentence)
         original_words = sentence.split(' ')
 
-        for keyword in keywords:
-            if keyword in already_exist:
-                continue
+        for keyword in remaining_keywords:
             term = new_terms.get(keyword, None)
             if term is None:
                 term = Term(keyword)
@@ -192,13 +197,15 @@ def extract_most_similar(cache_dir, keywords, window_size):
         bar = Bar('Extracting most similar for term {}'.format(keyword), max=len(term_ref.expressions))
 
         for expr in term_ref.expressions:
+            if len(expr.avg_embbedding) == 0:
+                continue
             reference_matrix.append(expr.avg_embbedding)
         reference_matrix = np.array(reference_matrix, dtype=float)
 
         term_db = get_terms(cache_dir, 'db', keyword, window_size)
         for expr_ind, expr in enumerate(term_db.expressions):
-            if np.any(np.isnan(expr.avg_embbedding)):
-                warning('Expression ' + expr.get_full_expr() + ' has nan avg embedding')
+            if len(expr.avg_embbedding) == 0:
+                warning('Expression ' + expr.get_full_expr() + ' has no embedding')
                 row = [expr.get_full_expr(), 'N/A', 0, '']
                 rows.append(row)
                 bar.next()
