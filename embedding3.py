@@ -13,7 +13,6 @@ from progress.bar import Bar
 from AbstractCommand import AbstractCommand
 from embedding2 import get_embeddings, extract_reference_terms, extract_db_expressions, get_terms, save_terms
 from taumahi import Taumahi
-from util import clean_exp_and_remove_stopwords
 
 reference_xlsx = 'files/both_together_19_words.xlsx'
 embedding_file = 'embedding-None-None.csv'
@@ -85,7 +84,6 @@ def cross_validate(cache_dir, ref_keywords, k=1):
             corresponding_exps.append(expr)
     reference_matrix = np.array(reference_matrix, dtype=float)
 
-    expr_ind = 0
     expected = []
     actual = []
 
@@ -97,10 +95,7 @@ def cross_validate(cache_dir, ref_keywords, k=1):
         for expr in term_ref.expressions:
             if len(expr.avg_embbedding) == 0:
                 warning('Expression ' + expr.get_full_expr() + ' has nan avg embedding')
-                row = [expr.get_full_expr(), expr.is_geo, 'N/A', 0, '', '']
-                rows.append(row)
                 bar.next()
-                expr_ind += 1
                 continue
 
             expr_embedding = np.array([expr.avg_embbedding], dtype=float)
@@ -131,7 +126,6 @@ def cross_validate(cache_dir, ref_keywords, k=1):
             expected.append(expr.is_geo)
             actual.append(is_geo)
 
-            expr_ind += 1
             bar.next()
         bar.finish()
 
@@ -236,7 +230,7 @@ def extract_most_similar(cache_dir, extract_type, ref_keywords, all_terms, windo
         for expr_ind, expr in enumerate(term_db.expressions):
             expr_full = expr.get_full_expr()
             if len(expr.avg_embbedding) == 0:
-                # warning('Expression ' + expr_full + ' has nan avg embedding')
+                warning('Expression ' + expr_full + ' has nan avg embedding')
                 # row = [expr_full, 'N/A', 0]
                 # if k == 1:
                 #     row.append('')

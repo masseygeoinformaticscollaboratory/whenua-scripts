@@ -148,7 +148,7 @@ def extract_db_expressions(cache_dir, keywords: list, window_size: int):
     mydb = client.whenua
     mycol = mydb.whenua
     docs = mycol.find({}, {'Text_Raw': 1, '_id': 0})
-    bar = Bar('Reading all documents from db for keywords: {}'.format(','.join(remaining_keywords)), max=docs.count())
+    bar = Bar('Reading all documents from db for {} keywords'.format(len(remaining_keywords)), max=docs.count())
 
     for doc_num, doc in enumerate(docs):
         sentence = doc['Text_Raw']
@@ -206,8 +206,6 @@ def extract_most_similar(cache_dir, keywords, window_size):
         for expr_ind, expr in enumerate(term_db.expressions):
             if len(expr.avg_embbedding) == 0:
                 warning('Expression ' + expr.get_full_expr() + ' has no embedding')
-                row = [expr.get_full_expr(), 'N/A', 0, '']
-                rows.append(row)
                 bar.next()
                 continue
             expr_embedding = np.array([expr.avg_embbedding], dtype=float)
@@ -242,7 +240,7 @@ def extract_most_similar(cache_dir, keywords, window_size):
 
 
 class Command(AbstractCommand):
-    
+
     def __init__(self):
         super(Command, self).__init__(__file__)
 
