@@ -48,6 +48,7 @@ from gensim import utils, matutils
 from gensim.models import basemodel
 from gensim.models.ldamodel import LdaModel
 from gensim.utils import check_output, revdict
+from progress.bar import Bar
 
 logger = logging.getLogger(__name__)
 
@@ -211,12 +212,15 @@ class LdaMallet(utils.SaveLoad, basemodel.BaseTopicModel):
             Opened file.
 
         """
+        bar = Bar("Convert corpus to mallet", max=len(corpus))
         for docno, doc in enumerate(corpus):
             if self.id2word:
                 tokens = chain.from_iterable([self.id2word[tokenid]] * int(cnt) for tokenid, cnt in doc)
             else:
                 tokens = chain.from_iterable([str(tokenid)] * int(cnt) for tokenid, cnt in doc)
             file_like.write(utils.to_utf8("%s 0 %s\n" % (docno, ' '.join(tokens))))
+            bar.next()
+        bar.finish()
 
     def convert_input(self, corpus, infer=False, serialize_corpus=True):
         """Convert corpus to Mallet format and save it to a temporary text file.
