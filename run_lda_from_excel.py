@@ -71,7 +71,7 @@ class Command(AbstractCommand):
             tfidf = gensim.models.TfidfModel(corpus)
             corpus = tfidf[corpus]
 
-        for num_topics in range(220, 410, 10):
+        for num_topics in range(10, 410, 10):
             if method == 'normal':
                 save_to = 'lda.{}.model'.format(num_topics)
                 output_file_name = 'lda.{}.csv'.format(num_topics)
