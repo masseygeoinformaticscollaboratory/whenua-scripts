@@ -34,3 +34,4 @@ files/
 scrape/cache
 *.pkl
 fasttext-*.txt
+cache/
