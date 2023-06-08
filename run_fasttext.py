@@ -1,3 +1,5 @@
+#comments in this file added by Kristin 8/6/23 and may not be correct!
+
 import os
 import time
 
@@ -56,6 +58,7 @@ class Command:
         if not os.path.isfile(model_file_name):
             print('Model file {} not found, creating'.format(model_file_name))
 
+            # run the fast text model to generate embeddings
             model = fasttext.train_unsupervised(fasttext_input_file, model='cbow', dim=300, minCount=1,
                                                 ws=20, epoch=10, wordNgrams=2, loss='hs')
             model.save_model(model_file_name)
