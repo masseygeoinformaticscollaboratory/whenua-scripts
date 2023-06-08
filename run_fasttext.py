@@ -24,6 +24,7 @@ class Command:
             mydb = client.whenua
             mycol = mydb.AllData
 
+            #access list of documents in MongoDB database
             ids_file = 'doc.ids'
 
             current_doc_ind = 0
